@@ -30,6 +30,15 @@ export class BitrixService {
     `${this.apiUrl}/wswyvle82l8ajlut/crm.deal.add.json`;
   private readonly dealList =
     `${this.apiUrl}/uu3tnphw928s8cxn/crm.deal.list.json`;
+  
+  // Endpoints de tareas (ulpik.bitrix24.es)
+  private readonly bitrixTaskUrl = 'https://ulpik.bitrix24.es/rest/82772';
+  private readonly taskAdd =
+    `${this.bitrixTaskUrl}/kwsuzlaj934sqy9a/tasks.task.add.json`;
+  private readonly taskList =
+    `${this.bitrixTaskUrl}/kwsuzlaj934sqy9a/tasks.task.list.json`;
+  private readonly taskGet =
+    `${this.bitrixTaskUrl}/kwsuzlaj934sqy9a/tasks.task.get.json`;
 
   async buscarLeadPorTelefono(telefono: string) {
     const { data } = await axios.post(this.contactList, {
@@ -201,6 +210,143 @@ export class BitrixService {
     console.log(`Datos del contacto: ${JSON.stringify(data)}`);
    const phone = data?.result?.[0]?.PHONE?.[0]?.VALUE ?? '';
 return phone; // "+12343233"
+  }
+
+  /**
+   * Crea una tarea en Bitrix24
+   * @param taskData - Datos de la tarea
+   * @returns ID de la tarea creada
+   */
+  async crearTarea(taskData: {
+    title: string;
+    description?: string;
+    responsibleId?: number; // ID del usuario responsable
+    deadline?: string; // Formato: YYYY-MM-DD o YYYY-MM-DD HH:mm:ss
+    priority?: number; // 1=Baja, 2=Normal (default), 3=Alta
+    dealId?: number; // ID de la negociación relacionada
+    contactId?: number; // ID del contacto relacionado
+    stageId?: string; // ID de la etapa (para tareas del CRM)
+    categoryId?: number; // ID del embudo
+  }) {
+    try {
+      const fields: any = {
+        TITLE: taskData.title,
+        RESPONSIBLE_ID: taskData.responsibleId || 138, // ID por defecto (puedes cambiarlo)
+      };
+
+      if (taskData.description) {
+        fields.DESCRIPTION = taskData.description;
+      }
+
+      if (taskData.deadline) {
+        fields.DEADLINE = taskData.deadline;
+      }
+
+      if (taskData.priority) {
+        fields.PRIORITY = taskData.priority;
+      }
+
+      // Vincular con negociación (Deal)
+      if (taskData.dealId) {
+        fields.UF_CRM_TASK = [`D_${taskData.dealId}`];
+      }
+
+      // Vincular con contacto
+      if (taskData.contactId) {
+        if (!fields.UF_CRM_TASK) {
+          fields.UF_CRM_TASK = [];
+        }
+        fields.UF_CRM_TASK.push(`C_${taskData.contactId}`);
+      }
+
+      console.log('Creando tarea con campos:', JSON.stringify(fields, null, 2));
+
+      const { data } = await axios.post(this.taskAdd, {
+        fields,
+      });
+
+      if (data.error) {
+        console.error('Error de Bitrix al crear tarea:', data.error);
+        throw new Error(`Error de Bitrix: ${data.error_description || data.error}`);
+      }
+
+      console.log('Tarea creada exitosamente. ID:', data.result.task.id);
+      return data.result.task.id;
+    } catch (error) {
+      console.error('Error creando tarea:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Crea una tarea vinculada a una negociación específica
+   */
+  async crearTareaParaNegociacion(
+    dealId: number,
+    title: string,
+    description?: string,
+    deadline?: string,
+  ) {
+    return this.crearTarea({
+      title,
+      description,
+      dealId,
+      deadline,
+      priority: 2, // Normal
+    });
+  }
+
+  /**
+   * Obtiene información de una tarea
+   */
+  async obtenerTarea(taskId: number) {
+    try {
+      const { data } = await axios.post(this.taskGet, {
+        taskId,
+        select: ['*', 'UF_*'],
+      });
+
+      return data.result.task;
+    } catch (error) {
+      console.error('Error obteniendo tarea:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Lista tareas con filtros
+   */
+  async listarTareas(filtros?: {
+    responsibleId?: number;
+    dealId?: number;
+    status?: number; // 2=En progreso, 3=Esperando control, 4=Completada, 5=Diferida
+  }) {
+    try {
+      const filter: any = {};
+
+      if (filtros?.responsibleId) {
+        filter.RESPONSIBLE_ID = filtros.responsibleId;
+      }
+
+      if (filtros?.dealId) {
+        filter.UF_CRM_TASK = `D_${filtros.dealId}`;
+      }
+
+      if (filtros?.status) {
+        filter.STATUS = filtros.status;
+      }
+
+      const { data } = await axios.post(this.taskList, {
+        filter,
+        select: ['*', 'UF_*'],
+        order: { ID: 'DESC' },
+      });
+
+      return data.result.tasks;
+    } catch (error) {
+      console.error('Error listando tareas:', error.message);
+      throw error;
+    }
   }
 
 }
