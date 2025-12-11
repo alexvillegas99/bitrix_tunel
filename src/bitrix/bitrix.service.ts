@@ -65,21 +65,29 @@ export class BitrixService {
       },
     });
     return res.result; // lead ID
-  }
-  async buscarContactoPorTelefonoOEmail(campo: string) {
-    let { data } = await axios.post(this.contactList, {
+  }async buscarContactoPorTelefonoOEmail(campo: string) {
+  try {
+    // 1) Buscar por teléfono
+    const phoneResponse = await axios.post(this.contactList, {
       filter: { PHONE: campo },
     });
 
-    if (data.result.length === 0) {
-      let { data } = await axios.post(this.contactList, {
-        filter: { EMAIL: campo },
-      });
-      return data.result[0];
+    if (phoneResponse?.data?.result?.length > 0) {
+      return phoneResponse.data.result[0];
     }
 
-    return data.result[0];
+    // 2) Buscar por email
+    const emailResponse = await axios.post(this.contactList, {
+      filter: { EMAIL: campo },
+    });
+
+    return emailResponse?.data?.result?.[0] ?? null;
+  } catch (error) {
+    console.error("❌ Error buscando contacto:", error?.response?.data || error);
+    return null;
   }
+}
+
 
   /**
    * Busca un contacto SOLO por email (más confiable para cancelaciones)
