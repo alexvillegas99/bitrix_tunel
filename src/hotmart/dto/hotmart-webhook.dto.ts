@@ -48,19 +48,39 @@ export class HotmartEventData {
     recurrency_number?: number;
   };
 
-  // Información de suscripción
+  // Información de suscripción (para eventos de compra)
   subscription?: {
     status?: string;
+    id?: number;
     subscriber?: {
       name?: string;
       email?: string;
       phone?: string;
     };
     plan?: {
+      id?: number;
       name?: string;
     };
     recurrency_number?: number;
   };
+
+  // Información del suscriptor (para eventos de cancelación - estructura real)
+  subscriber?: {
+    code?: string;
+    name?: string;
+    email?: string;
+    phone?: {
+      dddPhone?: string;
+      phone?: string;
+      dddCell?: string;
+      cell?: string;
+    };
+  };
+
+  // Campos específicos de cancelación
+  actual_recurrence_value?: number;
+  cancellation_date?: number;
+  date_next_charge?: number;
 
   // Información del afiliado
   commissions?: Array<{

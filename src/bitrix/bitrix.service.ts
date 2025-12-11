@@ -88,6 +88,35 @@ export class BitrixService {
   }
 
   /**
+   * Busca un contacto SOLO por email (más confiable para cancelaciones)
+   */
+  async buscarContactoPorEmail(email: string) {
+    try {
+      if (!email) {
+        return null;
+      }
+
+      const { data } = await axios.post(this.contactList, {
+        filter: { 
+          EMAIL: email,
+        },
+        select: ['ID', 'NAME', 'EMAIL', 'PHONE'],
+      });
+
+      if (data.result && data.result.length > 0) {
+        console.log(`✅ Contacto encontrado por email "${email}": ID ${data.result[0].ID}`);
+        return data.result[0];
+      }
+
+      console.log(`No se encontró contacto con email "${email}"`);
+      return null;
+    } catch (error) {
+      console.error(`Error buscando contacto por email: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
    * Busca un contacto por nombre Y email (ambos deben coincidir)
    */
   async buscarContactoPorNombreYEmail(nombre: string, email: string) {

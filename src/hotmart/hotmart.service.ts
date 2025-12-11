@@ -275,32 +275,34 @@ Acción requerida: Verificar que el cliente recibió acceso al producto y confir
    */
   private async handleSubscriptionCancellation(webhook: HotmartWebhookDto) {
     const { data } = webhook;
-    const subscriber = data?.subscription?.subscriber;
+    // ESTRUCTURA REAL: subscriber está en data.subscriber (no en data.subscription.subscriber)
+    const subscriber = data?.subscriber;
     const product = data?.product;
+    const subscription = data?.subscription;
 
-    if (!subscriber) {
-      this.logger.warn('Datos de suscriptor incompletos en el webhook');
+    if (!subscriber || !subscriber.email) {
+      this.logger.warn('Datos de suscriptor incompletos (email requerido)');
       return { status: 'datos incompletos' };
     }
 
     // Extraer información del suscriptor
     const nombre = subscriber.name || 'Sin nombre';
-    const telefono = subscriber.phone || '';
-    const email = subscriber.email || '';
-    const planNombre = data?.subscription?.plan?.name || 'Plan';
+    const email = subscriber.email;
+    const telefono = this.extractPhoneFromSubscriber(subscriber);
+    const planNombre = subscription?.plan?.name || 'Plan';
     const productoNombre = product?.name || 'Suscripción Hotmart';
 
-    this.logger.log(`❌ Cancelación de suscripción - Cliente: "${nombre}" (${email}), Tel: ${telefono}`);
+    this.logger.log(`❌ Cancelación de suscripción - Email: ${email}, Nombre: "${nombre}", Tel: ${telefono}`);
 
-    // Buscar contacto por nombre Y email
-    let contacto = await this.bitrixService.buscarContactoPorNombreYEmail(nombre, email);
+    // Buscar contacto SOLO por email (más confiable según requerimiento)
+    let contacto = await this.bitrixService.buscarContactoPorEmail(email);
     let contactId: number | null = null;
 
     if (contacto) {
       contactId = parseInt(contacto.ID);
-      this.logger.log(`✅ Contacto encontrado: ID ${contactId}`);
+      this.logger.log(`✅ Contacto encontrado por email: ID ${contactId}`);
     } else {
-      this.logger.log(`❌ No se encontró contacto - se creará deal sin vincular`);
+      this.logger.log(`❌ No se encontró contacto con email "${email}" - se creará deal sin vincular`);
     }
 
     // Crear deal en etapa de CANCELACIÓN (C44:UC_Z9UPZW)
@@ -333,7 +335,8 @@ Acción requerida: Verificar que el cliente recibió acceso al producto y confir
       status: 'success',
       metadata: {
         plan: planNombre,
-        subscription_status: data?.subscription?.status,
+        subscription_id: subscription?.id,
+        subscriber_code: subscriber.code,
       },
     });
 
@@ -413,6 +416,31 @@ Acción requerida: Verificar que el cliente recibió acceso al producto y confir
   }
 
   /**
+   * Extrae teléfono de un suscriptor (estructura de cancelación)
+   * Estructura: { dddPhone, phone, dddCell, cell }
+   */
+  private extractPhoneFromSubscriber(subscriber: any): string {
+    const phoneObj = subscriber?.phone;
+    if (!phoneObj) return '';
+
+    // Priorizar celular sobre teléfono fijo
+    if (phoneObj.cell && phoneObj.dddCell) {
+      return `+${phoneObj.dddCell}${phoneObj.cell}`;
+    }
+    if (phoneObj.cell) {
+      return phoneObj.cell;
+    }
+    if (phoneObj.phone && phoneObj.dddPhone) {
+      return `+${phoneObj.dddPhone}${phoneObj.phone}`;
+    }
+    if (phoneObj.phone) {
+      return phoneObj.phone;
+    }
+    
+    return '';
+  }
+
+  /**
    * Construye un mensaje detallado de la compra
    */
   private buildPurchaseMessage(webhook: HotmartWebhookDto): string {
@@ -442,9 +470,15 @@ Acción requerida: Verificar que el cliente recibió acceso al producto y confir
    */
   private buildCancellationMessage(webhook: HotmartWebhookDto): string {
     const { data } = webhook;
-    const subscriber = data?.subscription?.subscriber;
+    // ESTRUCTURA REAL: subscriber está en data.subscriber
+    const subscriber = data?.subscriber;
     const product = data?.product;
     const subscription = data?.subscription;
+
+    const telefono = this.extractPhoneFromSubscriber(subscriber);
+    const fechaCancelacion = data?.cancellation_date 
+      ? new Date(data.cancellation_date).toLocaleString('es-ES')
+      : 'N/A';
 
     const lines = [
       `❌ CANCELACIÓN DE SUSCRIPCIÓN`,
@@ -454,9 +488,14 @@ Acción requerida: Verificar que el cliente recibió acceso al producto y confir
       `👤 Datos del Cliente:`,
       `Nombre: ${subscriber?.name || 'N/A'}`,
       `Email: ${subscriber?.email || 'N/A'}`,
-      `Teléfono: ${subscriber?.phone || 'N/A'}`,
+      `Teléfono: ${telefono || 'N/A'}`,
+      `Código suscriptor: ${subscriber?.code || 'N/A'}`,
       ``,
-      `Estado: ${subscription?.status || 'cancelada'}`,
+      `📅 Información de Cancelación:`,
+      `Fecha de cancelación: ${fechaCancelacion}`,
+      `ID Suscripción: ${subscription?.id || 'N/A'}`,
+      `Valor de recurrencia: ${data?.actual_recurrence_value || 'N/A'}`,
+      ``,
       `Fecha del evento: ${new Date().toLocaleString('es-ES')}`,
     ];
 
