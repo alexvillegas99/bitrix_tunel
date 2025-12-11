@@ -274,7 +274,10 @@ Acción requerida: Verificar que el cliente recibió acceso al producto y confir
    * Maneja cancelación de suscripción
    */
   private async handleSubscriptionCancellation(webhook: HotmartWebhookDto) {
+    this.logger.log('🔴 INICIO handleSubscriptionCancellation');
     const { data } = webhook;
+    this.logger.log(`🔴 Data recibida: ${JSON.stringify(data, null, 2)}`);
+    
     const subscriber = data?.subscription?.subscriber;
     const product = data?.product;
 
@@ -303,6 +306,8 @@ Acción requerida: Verificar que el cliente recibió acceso al producto y confir
       this.logger.log(`❌ No se encontró contacto con nombre "${nombre}" y email "${email}"`);
     }
 
+    this.logger.log('🔴 A punto de crear deal de cancelación...');
+    
     // Crear deal en etapa de CANCELACIÓN (C44:UC_Z9UPZW)
     const dealId = await this.bitrixService.crearDealCancelacion(
       contactId,
@@ -312,12 +317,14 @@ Acción requerida: Verificar que el cliente recibió acceso al producto y confir
       email,
     );
 
-    this.logger.log(`✅ Deal de cancelación creado: ID ${dealId}, ContactID: ${contactId || 'VACÍO'}`);
+    this.logger.log(`✅ Deal de cancelación creado: ID ${dealId}, ContactID: ${contactId || 'VACÍO'}, Etapa: C44:UC_Z9UPZW`);
 
     // Registrar actividad con detalles de la cancelación
     const mensaje = this.buildCancellationMessage(webhook);
     await this.bitrixService.registrarActividad(dealId, mensaje, 'Hotmart Cancelación: ');
 
+    this.logger.log('🔴 A punto de registrar en auditoría...');
+    
     // Registrar en auditoría
     await this.auditService.log({
       action: 'cancelacion_suscripcion',
@@ -336,6 +343,8 @@ Acción requerida: Verificar que el cliente recibió acceso al producto y confir
         subscription_status: data?.subscription?.status,
       },
     });
+
+    this.logger.log('🔴 FIN handleSubscriptionCancellation');
 
     return { 
       status: 'cancelación de suscripción registrada',
