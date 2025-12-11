@@ -142,8 +142,18 @@ export class HotmartService {
     // Crear tarea automática de seguimiento
     let taskId: string | null = null;
     try {
-      const fechaLimite = new Date();
-      fechaLimite.setDate(fechaLimite.getDate() + 3); // 3 días después de la compra
+      // Usar fecha actual del servidor y sumar 3 días
+      const ahora = new Date();
+      const fechaLimite = new Date(ahora.getTime() + (3 * 24 * 60 * 60 * 1000)); // +3 días
+      
+      // Formato que Bitrix entiende: YYYY-MM-DD HH:mm:ss
+      const year = fechaLimite.getFullYear();
+      const month = String(fechaLimite.getMonth() + 1).padStart(2, '0');
+      const day = String(fechaLimite.getDate()).padStart(2, '0');
+      const fechaFormateada = `${year}-${month}-${day} 18:00:00`;
+      
+      this.logger.log(`📅 Fecha actual: ${ahora.toISOString()}`);
+      this.logger.log(`📅 Fecha límite tarea (3 días): ${fechaFormateada}`);
       
       taskId = await this.bitrixService.crearTareaParaNegociacion(
         dealId,
@@ -155,12 +165,12 @@ Email: ${email}
 Teléfono: ${telefono}
 
 Acción requerida: Verificar que el cliente recibió acceso al producto y confirmar su satisfacción.`,
-        fechaLimite.toISOString().split('T')[0] + ' 18:00:00',
+        fechaFormateada,
       );
       
-      this.logger.log(`Tarea de seguimiento creada. Task ID: ${taskId}`);
+      this.logger.log(`✅ Tarea de seguimiento creada. Task ID: ${taskId}, Fecha límite: ${fechaFormateada}`);
     } catch (error) {
-      this.logger.error(`Error creando tarea automática: ${error.message}`);
+      this.logger.error(`❌ Error creando tarea automática: ${error.message}`);
       // No lanzar error, continuar con el proceso
     }
 
