@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { BitrixService } from '../bitrix/bitrix.service';
 import { HotmartWebhookDto } from './dto/hotmart-webhook.dto';
+import { AuditService } from '../database/services/audit.service';
 import * as fs from 'fs';
 import * as path from 'path';
 import axios from 'axios';
@@ -16,7 +17,10 @@ export class HotmartService {
   // Servicio de email (puedes usar SendGrid, AWS SES, etc.)
   private readonly EMAIL_ENABLED = false; // Cambiar a true para activar emails
 
-  constructor(private readonly bitrixService: BitrixService) {
+  constructor(
+    private readonly bitrixService: BitrixService,
+    private readonly auditService: AuditService,
+  ) {
     // Asegurar que existe el directorio de logs
     this.ensureLogDirectory();
   }
@@ -126,6 +130,24 @@ export class HotmartService {
     await this.bitrixService.registrarActividad(dealId, mensaje, 'Hotmart: ');
 
     this.logger.log(`Compra procesada exitosamente. Deal ID: ${dealId}`);
+
+    // Registrar en la base de datos de auditoría
+    await this.auditService.logEvent({
+      event_type: 'purchase_completed',
+      source: 'hotmart',
+      source_event: webhook.event,
+      bitrix_contact_id: String(contactId),
+      bitrix_deal_id: String(dealId),
+      customer_name: nombre,
+      customer_phone: telefono,
+      customer_email: email,
+      product_name: productoNombre,
+      amount: precio,
+      currency: moneda,
+      transaction_id: purchase?.transaction || webhook.id,
+      status: 'success',
+      payload: webhook,
+    });
 
     return {
       status: 'compra procesada',
