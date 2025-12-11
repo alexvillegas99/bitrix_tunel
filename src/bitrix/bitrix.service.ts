@@ -13,32 +13,33 @@ export class BitrixService {
   ){
 
   }
-  private readonly apiUrl = 'https://bitrix.elsagrario.fin.ec/rest/138';
-  //concatena todo de una vez
+  // SOLO ULPIK.BITRIX24.ES
+  private readonly apiUrl = 'https://ulpik.bitrix24.es/rest/82772';
+  private readonly webhookToken = 'kwsuzlaj934sqy9a'; // Token con permisos completos
   
+  // Endpoints de CRM
   private readonly leadAdd =
-  `${this.apiUrl}/yk2aztg75p2nn0ia/crm.lead.add.json`;
+    `${this.apiUrl}/${this.webhookToken}/crm.lead.add.json`;
   private readonly activityAdd =
-    `${this.apiUrl}/cfa8x0ca0m4euzxg/crm.activity.add.json`;
+    `${this.apiUrl}/${this.webhookToken}/crm.activity.add.json`;
   private readonly dealUpdate =
-    `${this.apiUrl}/18i0vg3zyg5kxi9v/crm.deal.update.json`;
+    `${this.apiUrl}/${this.webhookToken}/crm.deal.update.json`;
   private readonly contactList =
-    `${this.apiUrl}/fvpaq81k0yvk9eas/crm.contact.list.json`;
+    `${this.apiUrl}/${this.webhookToken}/crm.contact.list.json`;
   private readonly contactAdd =
-    `${this.apiUrl}/tnnabkmaf49qy5w8/crm.contact.add.json`;
+    `${this.apiUrl}/${this.webhookToken}/crm.contact.add.json`;
   private readonly dealAdd =
-    `${this.apiUrl}/wswyvle82l8ajlut/crm.deal.add.json`;
+    `${this.apiUrl}/${this.webhookToken}/crm.deal.add.json`;
   private readonly dealList =
-    `${this.apiUrl}/uu3tnphw928s8cxn/crm.deal.list.json`;
+    `${this.apiUrl}/${this.webhookToken}/crm.deal.list.json`;
   
-  // Endpoints de tareas (ulpik.bitrix24.es)
-  private readonly bitrixTaskUrl = 'https://ulpik.bitrix24.es/rest/82772';
+  // Endpoints de tareas
   private readonly taskAdd =
-    `${this.bitrixTaskUrl}/kwsuzlaj934sqy9a/tasks.task.add.json`;
+    `${this.apiUrl}/${this.webhookToken}/tasks.task.add.json`;
   private readonly taskList =
-    `${this.bitrixTaskUrl}/kwsuzlaj934sqy9a/tasks.task.list.json`;
+    `${this.apiUrl}/${this.webhookToken}/tasks.task.list.json`;
   private readonly taskGet =
-    `${this.bitrixTaskUrl}/kwsuzlaj934sqy9a/tasks.task.get.json`;
+    `${this.apiUrl}/${this.webhookToken}/tasks.task.get.json`;
 
   async buscarLeadPorTelefono(telefono: string) {
     const { data } = await axios.post(this.contactList, {
@@ -382,6 +383,49 @@ return phone; // "+12343233"
       return data.result.tasks;
     } catch (error) {
       console.error('Error listando tareas:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Crea un deal específico para Hotmart en el embudo correcto
+   */
+  async crearDealHotmart(
+    contactId: number | null,
+    nombre: string,
+    producto: string,
+    precio: number,
+    moneda: string,
+  ): Promise<number> {
+    try {
+      const fields: any = {
+        TITLE: `Hotmart: ${producto} - ${nombre}`,
+        OPPORTUNITY: precio,
+        CURRENCY_ID: moneda,
+        // Embudo y etapa específicos de Hotmart
+        CATEGORY_ID: '44',
+        STAGE_ID: 'C44:UC_QHQCN9',
+      };
+
+      // Solo agregar contacto si existe
+      if (contactId) {
+        fields.CONTACT_ID = contactId;
+        console.log(`Creando deal con contacto vinculado: ${contactId}`);
+      } else {
+        console.log('Creando deal SIN contacto vinculado (campo vacío)');
+      }
+
+      const { data } = await axios.post(this.dealAdd, { fields });
+
+      if (data.error) {
+        console.error('Error de Bitrix al crear deal:', data.error);
+        throw new Error(`Error de Bitrix: ${data.error_description || data.error}`);
+      }
+
+      console.log(`✅ Deal creado: ID ${data.result}, Embudo: 44, Etapa: C44:UC_QHQCN9`);
+      return data.result;
+    } catch (error) {
+      console.error('Error creando deal Hotmart:', error.message);
       throw error;
     }
   }

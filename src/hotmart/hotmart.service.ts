@@ -330,32 +330,15 @@ Acción requerida: Verificar que el cliente recibió acceso al producto y confir
     precio: number,
     moneda: string,
   ): Promise<number> {
-    const axios = require('axios');
-    
-    const dealAdd = `https://bitrix.elsagrario.fin.ec/rest/138/wswyvle82l8ajlut/crm.deal.add.json`;
-    
-    const fields: any = {
-      TITLE: `Hotmart: ${producto} - ${nombre}`,
-      OPPORTUNITY: precio,
-      CURRENCY_ID: moneda,
-      // Embudo y etapa específicos de Hotmart
-      CATEGORY_ID: '44', // ID del embudo de Hotmart
-      STAGE_ID: 'C44:UC_QHQCN9', // Etapa específica
-    };
-
-    // Solo agregar contacto si existe
-    if (contactId) {
-      fields.CONTACT_ID = contactId;
-      this.logger.log(`Creando deal con contacto vinculado: ${contactId}`);
-    } else {
-      this.logger.log('Creando deal SIN contacto vinculado (campo vacío)');
-    }
-    
-    const { data } = await axios.post(dealAdd, {
-      fields,
-    });
-
-    return data.result;
+    // Usar el mismo servicio de Bitrix para crear deals
+    // Esto asegura que use ulpik.bitrix24.es
+    return await this.bitrixService.crearDealHotmart(
+      contactId,
+      nombre,
+      producto,
+      precio,
+      moneda,
+    );
   }
 
   /**
