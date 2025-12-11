@@ -276,18 +276,72 @@ Acción requerida: Verificar que el cliente recibió acceso al producto y confir
   private async handleSubscriptionCancellation(webhook: HotmartWebhookDto) {
     const { data } = webhook;
     const subscriber = data?.subscription?.subscriber;
-    const telefono = subscriber?.phone || '';
+    const product = data?.product;
 
-    const contacto = await this.bitrixService.buscarContactoPorTelefono(telefono);
-    if (contacto) {
-      const negociacion = await this.bitrixService.buscarNegociacionPorContacto(contacto.ID);
-      if (negociacion) {
-        const mensaje = `Suscripción cancelada: ${data?.subscription?.plan?.name || 'Plan'}`;
-        await this.bitrixService.registrarActividad(negociacion.ID, mensaje, 'Hotmart Suscripción: ');
-      }
+    if (!subscriber) {
+      this.logger.warn('Datos de suscriptor incompletos en el webhook');
+      return { status: 'datos incompletos' };
     }
 
-    return { status: 'cancelación de suscripción registrada' };
+    // Extraer información del suscriptor
+    const nombre = subscriber.name || 'Sin nombre';
+    const telefono = subscriber.phone || '';
+    const email = subscriber.email || '';
+    const planNombre = data?.subscription?.plan?.name || 'Plan';
+    const productoNombre = product?.name || 'Suscripción Hotmart';
+
+    this.logger.log(`📋 Cancelación de suscripción - Nombre: "${nombre}", Email: "${email}", Teléfono: "${telefono}"`);
+
+    // Buscar contacto por nombre Y email
+    let contacto = await this.bitrixService.buscarContactoPorNombreYEmail(nombre, email);
+    let contactId: number | null = null;
+
+    if (contacto) {
+      contactId = parseInt(contacto.ID);
+      this.logger.log(`✅ Contacto encontrado: ID ${contactId}`);
+    } else {
+      this.logger.log(`❌ No se encontró contacto con nombre "${nombre}" y email "${email}"`);
+    }
+
+    // Crear deal en etapa de CANCELACIÓN (C44:UC_Z9UPZW)
+    const dealId = await this.bitrixService.crearDealCancelacion(
+      contactId,
+      nombre,
+      productoNombre,
+      telefono,
+      email,
+    );
+
+    this.logger.log(`✅ Deal de cancelación creado: ID ${dealId}, ContactID: ${contactId || 'VACÍO'}`);
+
+    // Registrar actividad con detalles de la cancelación
+    const mensaje = this.buildCancellationMessage(webhook);
+    await this.bitrixService.registrarActividad(dealId, mensaje, 'Hotmart Cancelación: ');
+
+    // Registrar en auditoría
+    await this.auditService.log({
+      action: 'cancelacion_suscripcion',
+      module: 'hotmart',
+      event_type: webhook.event,
+      bitrix_contact_id: contactId ? String(contactId) : undefined,
+      bitrix_deal_id: String(dealId),
+      user_name: nombre,
+      user_phone: telefono,
+      user_email: email,
+      product_name: productoNombre,
+      webhook_id: webhook.id,
+      status: 'success',
+      metadata: {
+        plan: planNombre,
+        subscription_status: data?.subscription?.status,
+      },
+    });
+
+    return { 
+      status: 'cancelación de suscripción registrada',
+      contactId,
+      dealId,
+    };
   }
 
   /**
@@ -379,6 +433,32 @@ Acción requerida: Verificar que el cliente recibió acceso al producto y confir
     if (purchase?.recurrency_number) {
       lines.push(`Recurrencia: ${purchase.recurrency_number}`);
     }
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Construye un mensaje detallado de cancelación
+   */
+  private buildCancellationMessage(webhook: HotmartWebhookDto): string {
+    const { data } = webhook;
+    const subscriber = data?.subscription?.subscriber;
+    const product = data?.product;
+    const subscription = data?.subscription;
+
+    const lines = [
+      `❌ CANCELACIÓN DE SUSCRIPCIÓN`,
+      `Plan: ${subscription?.plan?.name || 'N/A'}`,
+      `Producto: ${product?.name || 'N/A'}`,
+      ``,
+      `👤 Datos del Cliente:`,
+      `Nombre: ${subscriber?.name || 'N/A'}`,
+      `Email: ${subscriber?.email || 'N/A'}`,
+      `Teléfono: ${subscriber?.phone || 'N/A'}`,
+      ``,
+      `Estado: ${subscription?.status || 'cancelada'}`,
+      `Fecha del evento: ${new Date().toLocaleString('es-ES')}`,
+    ];
 
     return lines.join('\n');
   }

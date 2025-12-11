@@ -402,7 +402,7 @@ return phone; // "+12343233"
         TITLE: `Hotmart: ${producto} - ${nombre}`,
         OPPORTUNITY: precio,
         CURRENCY_ID: moneda,
-        // Embudo y etapa específicos de Hotmart
+        // Embudo y etapa específicos de Hotmart (compras)
         CATEGORY_ID: '44',
         STAGE_ID: 'C44:UC_QHQCN9',
       };
@@ -426,6 +426,50 @@ return phone; // "+12343233"
       return data.result;
     } catch (error) {
       console.error('Error creando deal Hotmart:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Crea un deal para CANCELACIÓN de suscripción en Hotmart
+   * Etapa: C44:UC_Z9UPZW (etapa de cancelaciones)
+   */
+  async crearDealCancelacion(
+    contactId: number | null,
+    nombre: string,
+    producto: string,
+    telefono: string,
+    email: string,
+  ): Promise<number> {
+    try {
+      const fields: any = {
+        TITLE: `Hotmart - Cancelación: ${producto} - ${nombre}`,
+        // Embudo 44, etapa de CANCELACIÓN
+        CATEGORY_ID: '44',
+        STAGE_ID: 'C44:UC_Z9UPZW', // Etapa específica de cancelaciones
+      };
+
+      // Solo agregar contacto si existe
+      if (contactId) {
+        fields.CONTACT_ID = contactId;
+        console.log(`Creando deal de cancelación con contacto vinculado: ${contactId}`);
+      } else {
+        console.log('Creando deal de cancelación SIN contacto vinculado (campo vacío)');
+        // Agregar datos en el título si no hay contacto
+        fields.TITLE += ` | Tel: ${telefono} | Email: ${email}`;
+      }
+
+      const { data } = await axios.post(this.dealAdd, { fields });
+
+      if (data.error) {
+        console.error('Error de Bitrix al crear deal de cancelación:', data.error);
+        throw new Error(`Error de Bitrix: ${data.error_description || data.error}`);
+      }
+
+      console.log(`✅ Deal de cancelación creado: ID ${data.result}, Embudo: 44, Etapa: C44:UC_Z9UPZW`);
+      return data.result;
+    } catch (error) {
+      console.error('Error creando deal de cancelación:', error.message);
       throw error;
     }
   }
