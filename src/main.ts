@@ -42,7 +42,7 @@ async function bootstrap() {
 
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }),
-  );
+  ); 
 
   const nodeEnv = 3333;
 
